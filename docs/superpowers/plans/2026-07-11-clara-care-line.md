@@ -1600,8 +1600,272 @@ git commit -m "feat: smoke script for guardrail bypass proof; Clara README"
 
 ---
 
+## SCOPE ADDITION (approved by Nolan 2026-07-11 PM): Task 10 — Telehealth warm transfer
+
+For triage band `urgent` (NOT hardEscalate — the scripted 911/988 path is unchanged), Clara
+offers to connect the caller to a telehealth clinician; when the caller agrees, the model calls
+a client-side `transfer_to_telehealth` tool, and the server responds with Vapi's `transferCall`
+tool-call over SSE targeting env `TELEHEALTH_TRANSFER_NUMBER`. **The code below OVERRIDES the
+corresponding blocks in Tasks 1–2 and 5–8.**
+
+**Files:**
+- Modify: `.env.example` (Task 1), `src/careApi.ts` (Task 2), `src/gateway.ts` (Task 5), `src/tools.ts` (Task 6), `src/prompts.ts` (Task 7), `src/server.ts` (Task 8)
+- Test: additions in `tests/careApi.test.ts`, `tests/tools.test.ts`, `tests/prompts.test.ts`, `tests/server.test.ts`
+
+**Interfaces (revised):**
+- `ToolSpec` gains `clientSide?: boolean` — client-side tools are never dispatched server-side; the provider loop short-circuits and surfaces them.
+- `complete(messages, tools): Promise<TurnResult>` where
+  `TurnResult = { kind: 'text'; text: string } | { kind: 'client_tool'; name: string; args: Record<string, unknown> }`
+- `streamTransfer(res: ServerResponse, destination: string): void` exported from `src/server.ts`.
+
+- [ ] **Step 1: `.env.example` — append under the Vapi section**
+
+```
+TELEHEALTH_TRANSFER_NUMBER=   # E.164 number Vapi warm-transfers urgent (non-911) callers to
+```
+
+- [ ] **Step 2: `src/careApi.ts` — mockTriage gains an urgent branch** (insert BEFORE the self_care check)
+
+```ts
+  if (
+    /high fever|fever for (?:two|three|\d+) days|can'?t keep (?:water|food|anything) down|persistent vomiting|dehydrated|worst headache/i.test(
+      symptoms
+    )
+  ) {
+    return { band: 'urgent', confidence: 0.8, hardEscalate: null };
+  }
+```
+
+Test addition (`tests/careApi.test.ts`):
+
+```ts
+  test('medPrice: high fever for days -> urgent band, no hard escalation', async () => {
+    const r = await medPrice({ symptoms: "high fever for three days and I can't keep water down" });
+    expect(r.triage.band).toBe('urgent');
+    expect(r.triage.hardEscalate).toBeNull();
+  });
+```
+
+- [ ] **Step 3: `src/gateway.ts` — TurnResult + client-side short-circuit**
+
+Replace the `ToolSpec` interface, add `TurnResult`, change `complete` and both providers:
+
+```ts
+export interface ToolSpec {
+  name: string;
+  description: string;
+  parameters: Record<string, unknown>;
+  clientSide?: boolean; // surfaced to the caller (e.g. Vapi transfer), never dispatched here
+  run: (args: Record<string, unknown>) => Promise<string>;
+}
+
+export type TurnResult =
+  | { kind: 'text'; text: string }
+  | { kind: 'client_tool'; name: string; args: Record<string, unknown> };
+
+export async function complete(messages: ChatMessage[], tools: ToolSpec[]): Promise<TurnResult> {
+  const provider = process.env.MODEL_PROVIDER ?? 'anthropic';
+  const attempt = (): Promise<TurnResult> =>
+    provider === 'openai' ? completeOpenAI(messages, tools) : completeAnthropic(messages, tools);
+  try {
+    return await attempt();
+  } catch {
+    return await attempt();
+  }
+}
+```
+
+In `completeAnthropic`, return type `Promise<TurnResult>`; the text return becomes
+`return { kind: 'text', text: ... }`; the out-of-rounds return becomes
+`return { kind: 'text', text: OUT_OF_ROUNDS }`; and immediately after parsing `data`, before
+executing tool blocks:
+
+```ts
+    for (const block of data.content) {
+      if (block.type !== 'tool_use') continue;
+      if (tools.find((t) => t.name === block.name)?.clientSide) {
+        return { kind: 'client_tool', name: block.name, args: block.input };
+      }
+    }
+```
+
+In `completeOpenAI`, same return-type change, and after `if (!msg.tool_calls?.length) return { kind: 'text', text: msg.content ?? '' };`:
+
+```ts
+    for (const call of msg.tool_calls) {
+      if (tools.find((t) => t.name === call.function.name)?.clientSide) {
+        let args: Record<string, unknown> = {};
+        try {
+          args = JSON.parse(call.function.arguments || '{}') as Record<string, unknown>;
+        } catch {
+          // empty args are fine for client tools
+        }
+        return { kind: 'client_tool', name: call.function.name, args };
+      }
+    }
+```
+
+- [ ] **Step 4: `src/tools.ts` — add the client-side transfer tool** (append to `claraTools`)
+
+```ts
+  {
+    name: 'transfer_to_telehealth',
+    description:
+      'Connect the caller to a live telehealth clinician by transferring this phone call. Offer first; use only after the caller clearly agrees to be connected.',
+    parameters: { type: 'object', properties: {}, required: [] },
+    clientSide: true,
+    run: async () => 'transferring', // never dispatched server-side; the server turns this into a live call transfer
+  },
+```
+
+Test changes (`tests/tools.test.ts`) — the four-tools test becomes:
+
+```ts
+test('exposes the four care tools plus the client-side transfer tool', () => {
+  expect(claraTools.map((t) => t.name).sort()).toEqual([
+    'care_info',
+    'find_clinics',
+    'housing_check',
+    'med_price',
+    'transfer_to_telehealth',
+  ]);
+  expect(claraTools.find((t) => t.name === 'transfer_to_telehealth')?.clientSide).toBe(true);
+});
+```
+
+- [ ] **Step 5: `src/prompts.ts` — urgent band offers the transfer** (replace the `if (band)` block)
+
+```ts
+  if (band === 'urgent') {
+    lines.push(
+      "A deterministic triage engine rated the caller's latest message as \"urgent\" — not an emergency, but they should talk to a clinician soon. Offer to connect them right now to a telehealth clinician on this call; if they agree, call the transfer_to_telehealth tool."
+    );
+  } else if (band) {
+    lines.push(
+      `A deterministic triage engine rated the caller's latest message as "${band}". Respect it: primary means encourage seeing a clinician soon; self_care means reassure and offer OTC options.`
+    );
+  }
+```
+
+Test addition (`tests/prompts.test.ts`):
+
+```ts
+test('urgent band instructs Clara to offer the telehealth transfer', () => {
+  const p = systemPrompt(null, 'urgent');
+  expect(p).toContain('transfer_to_telehealth');
+  expect(p).toContain('urgent');
+});
+```
+
+- [ ] **Step 6: `src/server.ts` — transfer path.** Import `type TurnResult` alongside `complete`; add `streamTransfer`; the LLM-turn block becomes:
+
+```ts
+export function streamTransfer(res: ServerResponse, destination: string): void {
+  const base = {
+    id: `chatcmpl-clara-${Date.now()}`,
+    object: 'chat.completion.chunk',
+    created: Math.floor(Date.now() / 1000),
+    model: 'clara',
+  };
+  sseChunk(res, {
+    ...base,
+    choices: [
+      {
+        index: 0,
+        delta: {
+          role: 'assistant',
+          content: null,
+          tool_calls: [
+            {
+              index: 0,
+              id: `call_transfer_${Date.now()}`,
+              type: 'function',
+              function: { name: 'transferCall', arguments: JSON.stringify({ destination }) },
+            },
+          ],
+        },
+        finish_reason: null,
+      },
+    ],
+  });
+  sseChunk(res, { ...base, choices: [{ index: 0, delta: {}, finish_reason: 'tool_calls' }] });
+  res.write('data: [DONE]\n\n');
+  res.end();
+}
+```
+
+Inside the route handler (replacing the `let text` block):
+
+```ts
+    const transferNumber = process.env.TELEHEALTH_TRANSFER_NUMBER;
+    const activeTools = transferNumber
+      ? claraTools
+      : claraTools.filter((t) => t.name !== 'transfer_to_telehealth');
+
+    let result: TurnResult;
+    try {
+      result = await complete(messages, activeTools);
+    } catch (err) {
+      request.log.error(err, 'model provider failed after retry');
+      result = { kind: 'text', text: APOLOGY };
+    }
+
+    if (result.kind === 'client_tool' && result.name === 'transfer_to_telehealth' && transferNumber) {
+      request.log.info({ destination: transferNumber }, 'warm transfer to telehealth');
+      streamTransfer(res, transferNumber);
+      rememberTurn(phone, utterance, '(connected caller to a telehealth clinician)');
+      return;
+    }
+
+    const text = result.kind === 'text' ? result.text : APOLOGY;
+    streamText(res, text);
+    rememberTurn(phone, utterance, text);
+```
+
+Test addition (`tests/server.test.ts`):
+
+```ts
+import { streamTransfer } from '../src/server';
+import type { ServerResponse } from 'node:http';
+
+test('streamTransfer emits a Vapi transferCall tool-call SSE turn', () => {
+  const writes: string[] = [];
+  const fake = {
+    write: (s: string) => {
+      writes.push(s);
+      return true;
+    },
+    end: () => {},
+  } as unknown as ServerResponse;
+  streamTransfer(fake, '+15550001111');
+  const joined = writes.join('');
+  expect(joined).toContain('transferCall');
+  expect(joined).toContain('+15550001111');
+  expect(joined).toContain('"finish_reason":"tool_calls"');
+  expect(joined.trim().endsWith('data: [DONE]')).toBe(true);
+});
+```
+
+- [ ] **Step 7: Run everything, commit**
+
+Run: `bun run typecheck && bun test && bun run smoke`
+Expected: all green.
+
+```bash
+git add -A src tests .env.example
+git commit -m "feat: telehealth warm transfer for urgent non-emergency triage"
+```
+
+Note: the gateway's client-tool short-circuit is exercised live (model must choose the tool);
+offline coverage is the type system + tools/server/prompts tests. The live phone call is the
+integration test, per spec §7.
+
+---
+
 ## Post-build (not code, tracked outside this plan)
 
 1. Nolan mints the care-API token (Keys tab, scopes `care:read` + `calls:read`, label `clara-hackathon`) → `.env` `CARE_API_TOKEN`, set `CARE_API_MOCK=0`. Re-check real-mode response field names for clinics/care/housing against the upstream OpenAPI.
 2. Tunnel (`PUBLIC_URL`) + Vapi assistant custom-LLM URL + Twilio number import + first message "Hi, I'm Clara…".
-3. Live demo runs the 3-call script from spec §8.
+3. **Vapi transfer config:** the assistant's `transferCall` tool must list `TELEHEALTH_TRANSFER_NUMBER` as a destination (Vapi matches the destination we emit against its configured list). Use Nolan's second number for the demo.
+4. **Record the demo video EARLY** (Devpost requirement) — as soon as smoke passes in mock mode: screen-record a call + terminal showing the guardrail decision; keep secrets and the care API's base URL out of frame.
+5. Live demo runs the 3-call script from spec §8 (+ a fourth urgent-transfer call if it landed).
