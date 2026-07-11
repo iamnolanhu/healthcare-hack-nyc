@@ -343,11 +343,63 @@ export const KB_ENTRIES: KbEntry[] = [
   },
 ];
 
+// Function words score +1 against almost any English body via substring
+// match, which would surface garbage hits for off-topic queries — remote
+// docs edited in the Sigma UI can't be written around that, so filter the
+// query side instead.
+const STOPWORDS = new Set([
+  "the",
+  "and",
+  "for",
+  "are",
+  "but",
+  "not",
+  "you",
+  "was",
+  "one",
+  "out",
+  "get",
+  "has",
+  "had",
+  "his",
+  "her",
+  "its",
+  "our",
+  "she",
+  "him",
+  "too",
+  "use",
+  "did",
+  "let",
+  "with",
+  "this",
+  "that",
+  "from",
+  "have",
+  "your",
+  "what",
+  "when",
+  "where",
+  "which",
+  "would",
+  "could",
+  "should",
+  "about",
+  "there",
+  "their",
+  "than",
+  "then",
+  "them",
+  "some",
+  "just",
+  "like",
+]);
+
 const tokenize = (text: string): string[] =>
   text
     .toLowerCase()
     .split(/[^a-z0-9]+/)
-    .filter((t) => t.length > 2);
+    .filter((t) => t.length > 2 && !STOPWORDS.has(t));
 
 // Keyword hits outweigh title hits outweigh body hits; ties keep entry
 // order. Zero-score entries never surface, so an off-topic query returns
