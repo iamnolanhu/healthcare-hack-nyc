@@ -25,9 +25,11 @@ to the cheapest legitimate source.
 2. **Clara triages first, talks second.** A deterministic safety check runs on every
    utterance *before* the AI model sees it. Chest pain and a numb arm gets an instant,
    scripted 911 escalation — the model is never in the loop on emergencies.
-3. **For everything else, Clara answers with real data:** an OTC suggestion, its real
+3. **Urgent but not 911?** Clara offers to connect you directly to a telehealth
+   professional and transfers the call — a real doctor, without the ER bill.
+4. **For everything else, Clara answers with real data:** an OTC suggestion, its real
    cash price, and the nearest clinic that takes patients without insurance.
-4. **Call back and Clara remembers you** — greets you by name and follows up on the
+5. **Call back and Clara remembers you** — greets you by name and follows up on the
    sore throat.
 
 ## What's built vs. what's vision
@@ -44,12 +46,13 @@ goes in "What's next."
 | Grounded answers | Care-API tools: med cash prices, low-cost clinic finder, care knowledge base, housing checks |
 | Caller memory | Profile keyed by phone number; continuity across calls |
 | Swappable model brain | Provider-agnostic gateway, Claude by default |
+| Remote doctor warm transfer | For urgent-but-not-911 triage, Clara offers and executes a live call transfer to a telehealth line (Vapi call transfer) — added to build scope 2026-07-11 PM; confirm it landed before claiming it |
 
 **Vision / stretch (from the memo — not built, pitch as "What's next"):**
 
-- **Remote doctor handoff.** For urgent-but-not-911 cases, Clara conferences in a
-  telehealth professional who can prescribe. Clara transcribes the visit, extracts the
-  prescription, and finds the lowest real price for it online.
+- **Prescription price-shopping.** After a telehealth visit, Clara transcribes the
+  call, extracts the prescription, and finds the lowest real price for it online —
+  what it actually costs, versus kickback-inflated options.
 - **SMS follow-up.** When there's too much to convey by voice, Clara texts the caller
   Google Maps links to the clinic and other useful links.
 - **OTC product photos.** For over-the-counter recommendations, Clara texts a product
@@ -70,8 +73,13 @@ goes in "What's next."
 - **Challenges:** making safety deterministic — the emergency path never touches the
   LLM, and a keyword fail-safe keeps it that way even if the data API is unreachable.
 - **What's next:** the three vision features above.
-- **Demo:** three 30-second calls — emergency escalation, grounded sore-throat answer,
-  personalized callback. Script in design spec §8.
+- **Demo (live):** three 30-second calls — emergency escalation, grounded sore-throat
+  answer, personalized callback. Script in design spec §8. If the warm transfer lands,
+  add a fourth call showing it.
+- **Demo video (required):** record the demo calls **early**, as soon as the pipeline
+  works end-to-end in mock mode — don't leave it for the deadline crunch. Screen-record
+  the call + a terminal showing the guardrail decision, and keep secrets and the care
+  API's base URL out of frame.
 
 ## Submission hygiene (public repo, public Devpost)
 
