@@ -29,3 +29,10 @@ test("urgent band instructs Clara to offer the telehealth transfer", () => {
   expect(p).toContain("transfer_to_telehealth");
   expect(p).toContain("urgent");
 });
+
+test("sms channel swaps the voice overlay for texting style", () => {
+  const p = systemPrompt(null, null, "sms");
+  expect(p).toContain("text message");
+  expect(p).not.toContain("PHONE CALL");
+  expect(p).toContain("Clara"); // base persona is channel-neutral and always present
+});

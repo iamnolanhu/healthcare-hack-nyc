@@ -7,7 +7,7 @@ import type { ServerResponse } from "node:http";
 import { complete, type ChatMessage, type TurnResult } from "./gateway";
 import { checkGuardrail } from "./guardrail";
 import { loadProfile, rememberTurn } from "./memory";
-import { systemPrompt } from "./prompts";
+import { systemPrompt, type Channel } from "./prompts";
 import { claraTools } from "./tools";
 
 interface VapiChatRequest {
@@ -99,6 +99,8 @@ export function buildServer(): FastifyInstance {
   app.post("/chat/completions", async (request, reply) => {
     const body = request.body as VapiChatRequest;
     const phone = body.call?.customer?.number ?? body.customer?.number ?? null;
+    // Voice turns arrive with Vapi's call object; SMS/chat sessions don't.
+    const channel: Channel = body.call ? "voice" : "sms";
     const incoming = Array.isArray(body.messages) ? body.messages : [];
     const lastUser = [...incoming].reverse().find((m) => m.role === "user");
     const utterance =
@@ -126,7 +128,7 @@ export function buildServer(): FastifyInstance {
     }
 
     const messages: ChatMessage[] = [
-      { role: "system", content: systemPrompt(profile, guard.band) },
+      { role: "system", content: systemPrompt(profile, guard.band, channel) },
       ...incoming
         .filter(
           (m): m is { role: "user" | "assistant"; content: string } =>
