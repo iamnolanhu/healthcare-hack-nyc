@@ -4,6 +4,7 @@
 
 import * as careApi from "./careApi";
 import type { ToolSpec } from "./gateway";
+import { kbLookup } from "./kbRemote";
 
 const UNREACHABLE = "I can't reach that data right now.";
 
@@ -105,6 +106,28 @@ export const claraTools: ToolSpec[] = [
           await careApi.housingCheck({ address: asString(args.address) ?? "" }),
         ),
       ),
+  },
+  {
+    name: "kb_search",
+    description:
+      "Look up Arya Health organization facts (services, hours, cost, telehealth transfer, coverage area, privacy) and grounded care guidance or NYC resource info (Medicaid, NYC Care, 988, food assistance). Use for any question about Arya Health itself or general care/resource navigation.",
+    parameters: {
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          description: "The caller's question in their own words",
+        },
+      },
+      required: ["query"],
+    },
+    run: (args) =>
+      graceful(async () => {
+        const result = await kbLookup(asString(args.query) ?? "");
+        if (result.results.length === 0)
+          return JSON.stringify({ results: [], note: "no knowledge found" });
+        return JSON.stringify(result);
+      }),
   },
   {
     name: "transfer_to_telehealth",

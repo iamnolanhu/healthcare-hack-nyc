@@ -4,11 +4,12 @@ process.env.CARE_API_MOCK = "1";
 
 import { claraTools } from "../src/tools";
 
-test("exposes the four care tools plus the client-side transfer tool", () => {
+test("exposes the five care tools plus the client-side transfer tool", () => {
   expect(claraTools.map((t) => t.name).sort()).toEqual([
     "care_info",
     "find_clinics",
     "housing_check",
+    "kb_search",
     "med_price",
     "transfer_to_telehealth",
   ]);
