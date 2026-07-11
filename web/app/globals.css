@@ -14,6 +14,10 @@
     band-emergency → WHITE text  5.2:1  (AA)
     band-crisis   → WHITE text   6.6:1  (AA)
     ink on every -soft variant . ≥14:1  (AA/AAA)
+    failsafe chip, white bands → WHITE on black/25 plate ≥7.4:1
+                                 (self-care 7.4 · emergency 7.9 · primary 8.2 · crisis 9.7)
+    failsafe chip, urgent ...... INK on ink/20 plate 5.4:1
+                                 (black/25 under ink lands at 4.5 — keep the ink blend)
 */
 @theme {
   /* 60% — shell: warm off-white, holds the space */
@@ -43,6 +47,11 @@
   --color-band-urgent-soft: oklch(96% 0.03 85);
   --color-band-emergency-soft: oklch(95% 0.025 45);
   --color-band-crisis-soft: oklch(94% 0.03 27);
+
+  /* Motion: the ONE ease curve — decisive start, quiet settle (Emil ease-out).
+     Overrides Tailwind's built-in `ease-out` utility; in raw CSS or arbitrary
+     values, reference it as var(--ease-out). Never spring/bounce. */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
 }
 
 @theme inline {

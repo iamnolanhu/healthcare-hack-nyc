@@ -13,16 +13,19 @@ const proofs = [
   },
   {
     label: "Personal",
-    detail: "Remembers you call to call",
+    detail: "Remembers you, call to call",
     chip: "bg-band-self-care-soft",
     dot: "bg-band-self-care",
   },
 ] as const;
 
-export default function Home() {
-  const phone = process.env.NEXT_PUBLIC_CLARA_PHONE ?? "+1 (000) 000-0000";
-  const tel = phone.replace(/[^+\d]/g, "");
+// Clara's public call-in line — the Vapi toll-free number, checked in as the
+// default so a placeholder can never render. NEXT_PUBLIC_CLARA_PHONE overrides
+// it, but is inlined at build time: changing it requires a rebuild.
+const phone = process.env.NEXT_PUBLIC_CLARA_PHONE ?? "+1 (848) 249-1409";
+const tel = phone.replace(/[^+\d]/g, "");
 
+export default function Home() {
   return (
     <main className="flex flex-1 items-center bg-shell px-6 py-16 sm:px-12">
       <div className="mx-auto w-full max-w-2xl space-y-12">
