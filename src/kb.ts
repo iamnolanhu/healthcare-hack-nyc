@@ -1036,7 +1036,13 @@ export function searchKb(
     const body = entry.body.toLowerCase();
     let score = 0;
     for (const token of tokens) {
-      if (keywords.some((k) => k.includes(token) || token.includes(k)))
+      // Query tokens may contain a keyword only when the keyword is long
+      // enough to be distinctive — "hot" hiding inside "shot" is not a hit.
+      if (
+        keywords.some(
+          (k) => k.includes(token) || (k.length >= 4 && token.includes(k)),
+        )
+      )
         score += 3;
       if (title.includes(token)) score += 2;
       if (body.includes(token)) score += 1;
