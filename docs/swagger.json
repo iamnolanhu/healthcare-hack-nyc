@@ -1,0 +1,184 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Clara Care Line API",
+    "description": "REST surface of the Clara server: an OpenAI-compatible custom-LLM endpoint that Vapi points at for each conversation turn, plus a health probe. Vapi owns all audio (STT/TTS/turn-taking); this server owns cognition — profile load, deterministic guardrail, model + care tools, memory. Emergency turns stream a fixed 911/988 script and never reach the LLM.",
+    "version": "1.0.0"
+  },
+  "servers": [
+    { "url": "http://localhost:3000", "description": "Local development" },
+    {
+      "url": "{publicUrl}",
+      "description": "Public HTTPS tunnel that the Vapi assistant's custom LLM URL points at (PUBLIC_URL in .env)",
+      "variables": { "publicUrl": { "default": "https://example.ngrok.app" } }
+    }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "operationId": "getHealth",
+        "summary": "Liveness probe",
+        "responses": {
+          "200": {
+            "description": "Server is up",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": { "ok": { "type": "boolean" } },
+                  "required": ["ok"]
+                },
+                "example": { "ok": true }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/chat/completions": {
+      "post": {
+        "operationId": "createChatCompletion",
+        "summary": "OpenAI-compatible chat turn (SSE only)",
+        "description": "Handles one conversation turn. Always responds 200 with a `text/event-stream` body in the OpenAI `chat.completion.chunk` format — there is no non-streaming mode. Turn order: caller profile load (by phone number) → deterministic guardrail triage (emergencies get a fixed script, the model is never called) → model completion with grounded care tools → profile save. If a warm transfer to a telehealth clinician is warranted and `TELEHEALTH_TRANSFER_NUMBER` is configured, the stream emits a `transferCall` tool-call chunk that Vapi executes.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ChatRequest" },
+              "example": {
+                "messages": [
+                  {
+                    "role": "user",
+                    "content": "I have a sore throat, what can I take?"
+                  }
+                ],
+                "call": { "customer": { "number": "+15551234567" } }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Server-sent event stream. Each event is `data: <JSON>` where the JSON is an OpenAI `chat.completion.chunk`; the stream ends with `data: [DONE]`. Two shapes occur: assistant text deltas (finish_reason `stop`), or a single `transferCall` tool-call delta (finish_reason `tool_calls`) when warm-transferring the caller. Model errors degrade to a spoken apology — the stream itself never errors.",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string",
+                  "description": "Stream of ChatCompletionChunk events terminated by [DONE]. See components.schemas.ChatCompletionChunk for the per-event payload."
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ChatRequest": {
+        "type": "object",
+        "description": "Vapi custom-LLM request. Voice turns include Vapi's `call` object (used to detect the voice channel and the caller's number for profile continuity); SMS/chat sessions may carry `customer` at the top level instead. Unknown callers are served without a profile — the turn never fails on a missing number.",
+        "properties": {
+          "messages": {
+            "type": "array",
+            "description": "Conversation so far, OpenAI chat format. The last `user` message is the utterance triaged by the guardrail.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "role": {
+                  "type": "string",
+                  "enum": ["system", "user", "assistant"]
+                },
+                "content": { "type": "string", "nullable": true }
+              }
+            }
+          },
+          "call": {
+            "type": "object",
+            "description": "Present on voice turns (sent by Vapi).",
+            "properties": {
+              "customer": {
+                "type": "object",
+                "properties": {
+                  "number": {
+                    "type": "string",
+                    "description": "Caller phone number, E.164"
+                  }
+                }
+              }
+            }
+          },
+          "customer": {
+            "type": "object",
+            "description": "Fallback caller identity for non-voice (SMS/chat) sessions.",
+            "properties": {
+              "number": {
+                "type": "string",
+                "description": "Caller phone number, E.164"
+              }
+            }
+          }
+        }
+      },
+      "ChatCompletionChunk": {
+        "type": "object",
+        "description": "Payload of each SSE `data:` event (OpenAI chat.completion.chunk).",
+        "properties": {
+          "id": { "type": "string", "example": "chatcmpl-clara-1760000000000" },
+          "object": { "type": "string", "enum": ["chat.completion.chunk"] },
+          "created": { "type": "integer", "description": "Unix seconds" },
+          "model": { "type": "string", "enum": ["clara"] },
+          "choices": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "index": { "type": "integer" },
+                "delta": {
+                  "type": "object",
+                  "properties": {
+                    "role": { "type": "string", "enum": ["assistant"] },
+                    "content": { "type": "string", "nullable": true },
+                    "tool_calls": {
+                      "type": "array",
+                      "description": "Present only on the warm-transfer chunk.",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "index": { "type": "integer" },
+                          "id": {
+                            "type": "string",
+                            "example": "call_transfer_1760000000000"
+                          },
+                          "type": { "type": "string", "enum": ["function"] },
+                          "function": {
+                            "type": "object",
+                            "properties": {
+                              "name": {
+                                "type": "string",
+                                "enum": ["transferCall"]
+                              },
+                              "arguments": {
+                                "type": "string",
+                                "description": "JSON string: {\"destination\": \"<E.164 number>\"}"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "finish_reason": {
+                  "type": "string",
+                  "nullable": true,
+                  "enum": ["stop", "tool_calls", null]
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
