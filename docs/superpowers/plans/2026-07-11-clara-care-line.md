@@ -33,7 +33,7 @@
 - Consumes: nothing.
 - Produces: `bun run typecheck`, `bun test`, `bun run dev`, `bun run smoke` scripts; strict TS config all later tasks compile under.
 
-- [ ] **Step 1: Write `package.json`**
+- [x] **Step 1: Write `package.json`**
 
 ```json
 {
@@ -57,7 +57,7 @@
 }
 ```
 
-- [ ] **Step 2: Write `tsconfig.json`**
+- [x] **Step 2: Write `tsconfig.json`**
 
 ```json
 {
@@ -75,14 +75,14 @@
 }
 ```
 
-- [ ] **Step 3: Append to `.gitignore`**
+- [x] **Step 3: Append to `.gitignore`**
 
 ```
 # Caller-profile store (may hold phone numbers)
 data/
 ```
 
-- [ ] **Step 4: Replace `.env.example` with**
+- [x] **Step 4: Replace `.env.example` with**
 
 ```
 # Twilio (required for sponsor prizes)
@@ -110,12 +110,12 @@ PORT=3000
 PUBLIC_URL=   # public tunnel URL for Vapi -> this server
 ```
 
-- [ ] **Step 5: Install and verify**
+- [x] **Step 5: Install and verify**
 
 Run: `bun install && bun run typecheck`
 Expected: installs fastify + dev deps; typecheck exits 0 (no source files yet is fine).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add package.json tsconfig.json bun.lock .gitignore .env.example
@@ -142,7 +142,7 @@ git commit -m "chore: scaffold bun + strict TypeScript project"
 
 Real-mode response mapping for clinics/care/housing follows the upstream OpenAPI (`GET <base>/openapi.yaml`) — re-check field names there when the real token lands; mock shapes above are the contract the rest of Clara compiles against.
 
-- [ ] **Step 1: Write the failing test `tests/careApi.test.ts`**
+- [x] **Step 1: Write the failing test `tests/careApi.test.ts`**
 
 ```ts
 import { describe, expect, test } from 'bun:test';
@@ -188,12 +188,12 @@ describe('careApi mock mode', () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `bun test tests/careApi.test.ts`
 Expected: FAIL — cannot resolve `../src/careApi`.
 
-- [ ] **Step 3: Write `src/careApi.ts`**
+- [x] **Step 3: Write `src/careApi.ts`**
 
 ```ts
 // Typed client for the upstream care API (read-only integration).
@@ -365,12 +365,12 @@ export async function housingCheck(q: { address: string }): Promise<HousingCheck
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `bun test tests/careApi.test.ts && bun run typecheck`
 Expected: 5 pass, typecheck clean.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/careApi.ts tests/careApi.test.ts
@@ -393,7 +393,7 @@ git commit -m "feat: typed care-API client with 429 retry and mock mode"
   - `checkGuardrail(utterance: string): Promise<GuardrailResult>` where
     `GuardrailResult = { escalate: true; code: '911' | '988'; script: string; source: 'triage' | 'keyword' } | { escalate: false; band: TriageBand | null }`
 
-- [ ] **Step 1: Write the failing test `tests/guardrail.test.ts`**
+- [x] **Step 1: Write the failing test `tests/guardrail.test.ts`**
 
 ```ts
 import { describe, expect, test } from 'bun:test';
@@ -451,12 +451,12 @@ describe('checkGuardrail (deterministic triage first)', () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `bun test tests/guardrail.test.ts`
 Expected: FAIL — cannot resolve `../src/guardrail`.
 
-- [ ] **Step 3: Write `src/guardrail.ts`**
+- [x] **Step 3: Write `src/guardrail.ts`**
 
 ```ts
 // Deterministic guardrail that runs BEFORE the LLM on every turn.
@@ -530,12 +530,12 @@ export async function checkGuardrail(utterance: string): Promise<GuardrailResult
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `bun test tests/guardrail.test.ts && bun run typecheck`
 Expected: 7 pass, typecheck clean.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/guardrail.ts tests/guardrail.test.ts
@@ -558,7 +558,7 @@ git commit -m "feat: guardrail-first triage with scripted 911/988 and keyword fa
   - `rememberTurn(phone: string | null, utterance: string, reply: string): void`
   - `extractName(utterance: string): string | null`
 
-- [ ] **Step 1: Write the failing test `tests/memory.test.ts`**
+- [x] **Step 1: Write the failing test `tests/memory.test.ts`**
 
 ```ts
 import { afterAll, beforeEach, expect, test } from 'bun:test';
@@ -602,12 +602,12 @@ test('extractName', () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `bun test tests/memory.test.ts`
 Expected: FAIL — cannot resolve `../src/memory`.
 
-- [ ] **Step 3: Write `src/memory.ts`**
+- [x] **Step 3: Write `src/memory.ts`**
 
 ```ts
 // Per-caller memory keyed by E.164 phone number. A JSON file stands in
@@ -682,12 +682,12 @@ export function rememberTurn(phone: string | null, utterance: string, reply: str
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `bun test tests/memory.test.ts && bun run typecheck`
 Expected: 5 pass, typecheck clean.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/memory.ts tests/memory.test.ts
@@ -711,7 +711,7 @@ git commit -m "feat: JSON-file caller profiles keyed by phone number"
   - `stats: { llmCalls: number }` — incremented on every provider HTTP call; smoke test asserts the emergency path leaves it untouched.
   - `toAnthropicPayload(messages: ChatMessage[]): { system: string; messages: AnthropicMessage[] }` — exported for tests.
 
-- [ ] **Step 1: Write the failing test `tests/gateway.test.ts`**
+- [x] **Step 1: Write the failing test `tests/gateway.test.ts`**
 
 ```ts
 import { expect, test } from 'bun:test';
@@ -739,12 +739,12 @@ test('consecutive same-role messages merge (provider requires alternation)', () 
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `bun test tests/gateway.test.ts`
 Expected: FAIL — cannot resolve `../src/gateway`.
 
-- [ ] **Step 3: Write `src/gateway.ts`**
+- [x] **Step 3: Write `src/gateway.ts`**
 
 ```ts
 // Provider-agnostic model gateway. One complete() entry point; the
@@ -934,12 +934,12 @@ async function completeOpenAI(messages: ChatMessage[], tools: ToolSpec[]): Promi
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `bun test tests/gateway.test.ts && bun run typecheck`
 Expected: 2 pass, typecheck clean.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/gateway.ts tests/gateway.test.ts
@@ -958,7 +958,7 @@ git commit -m "feat: provider-agnostic model gateway with internal tool loop"
 - Consumes: `careApi` functions (Task 2), `ToolSpec` from `./gateway` (Task 5).
 - Produces (used by server): `claraTools: ToolSpec[]` — `med_price`, `find_clinics`, `care_info`, `housing_check`. Every `run` degrades to the string `"I can't reach that data right now."` on error (spec §6).
 
-- [ ] **Step 1: Write the failing test `tests/tools.test.ts`**
+- [x] **Step 1: Write the failing test `tests/tools.test.ts`**
 
 ```ts
 import { expect, test } from 'bun:test';
@@ -1003,12 +1003,12 @@ test('tool failure degrades gracefully, never throws', async () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `bun test tests/tools.test.ts`
 Expected: FAIL — cannot resolve `../src/tools`.
 
-- [ ] **Step 3: Write `src/tools.ts`**
+- [x] **Step 3: Write `src/tools.ts`**
 
 ```ts
 // Tool schemas + dispatch: the model's only path to facts. Grounding
@@ -1109,12 +1109,12 @@ export const claraTools: ToolSpec[] = [
 ];
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `bun test tests/tools.test.ts && bun run typecheck`
 Expected: 4 pass, typecheck clean.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/tools.ts tests/tools.test.ts
@@ -1133,7 +1133,7 @@ git commit -m "feat: care-API tool schemas and dispatch with graceful degradatio
 - Consumes: `CallerProfile` from `./memory`, `TriageBand` from `./careApi`.
 - Produces (used by server): `systemPrompt(profile: CallerProfile | null, band: TriageBand | null): string`
 
-- [ ] **Step 1: Write the failing test `tests/prompts.test.ts`**
+- [x] **Step 1: Write the failing test `tests/prompts.test.ts`**
 
 ```ts
 import { expect, test } from 'bun:test';
@@ -1163,12 +1163,12 @@ test('returning caller prompt injects name, history, and triage band', () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `bun test tests/prompts.test.ts`
 Expected: FAIL — cannot resolve `../src/prompts`.
 
-- [ ] **Step 3: Write `src/prompts.ts`**
+- [x] **Step 3: Write `src/prompts.ts`**
 
 ```ts
 // Clara's persona plus per-caller personalization, rebuilt every turn
@@ -1202,12 +1202,12 @@ export function systemPrompt(profile: CallerProfile | null, band: TriageBand | n
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `bun test tests/prompts.test.ts && bun run typecheck`
 Expected: 2 pass, typecheck clean.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/prompts.ts tests/prompts.test.ts
@@ -1230,7 +1230,7 @@ git commit -m "feat: Clara persona prompt with triage band and profile injection
   - `GET /health` — `{ ok: true }` for tunnel checks.
   - Running `bun src/server.ts` listens on `PORT` (default 3000).
 
-- [ ] **Step 1: Write the failing test `tests/server.test.ts`**
+- [x] **Step 1: Write the failing test `tests/server.test.ts`**
 
 ```ts
 import { afterAll, expect, test } from 'bun:test';
@@ -1289,12 +1289,12 @@ test('emergency turn streams the scripted 911 SSE and never calls the LLM', asyn
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `bun test tests/server.test.ts`
 Expected: FAIL — cannot resolve `../src/server`.
 
-- [ ] **Step 3: Write `src/server.ts`**
+- [x] **Step 3: Write `src/server.ts`**
 
 ```ts
 // One OpenAI-compatible SSE endpoint that Vapi points at as its custom
@@ -1415,12 +1415,12 @@ if (import.meta.main) {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `bun test tests/server.test.ts && bun run typecheck`
 Expected: 1 pass (4 assertions), typecheck clean.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/server.ts tests/server.test.ts
@@ -1439,7 +1439,7 @@ git commit -m "feat: Vapi-compatible /chat/completions SSE endpoint with guardra
 - Consumes: `buildServer` + `streamText` contract (Task 8), `stats` (Task 5).
 - Produces: `bun run smoke` — exits 0 when the emergency path is scripted with zero LLM calls (and, if a provider key is present, the normal turn returns a model reply).
 
-- [ ] **Step 1: Write `scripts/smoke.ts`**
+- [x] **Step 1: Write `scripts/smoke.ts`**
 
 ```ts
 // Exercises the endpoint with fake Vapi payloads — no telephony needed.
@@ -1524,12 +1524,12 @@ rmSync('data/smoke-profiles.json', { force: true });
 process.exit(failed ? 1 : 0);
 ```
 
-- [ ] **Step 2: Run the smoke script**
+- [x] **Step 2: Run the smoke script**
 
 Run: `bun run smoke`
 Expected: `PASS emergency turn…` and either `PASS normal turn…` (key present) or `SKIP normal turn…`. Exit 0.
 
-- [ ] **Step 3: Rewrite `README.md`**
+- [x] **Step 3: Rewrite `README.md`**
 
 ```markdown
 # Clara — Grounded Voice Care Line
@@ -1581,7 +1581,7 @@ import a Twilio number into Vapi, and call it.
 | Guardrails / reliability | deterministic triage before the LLM + keyword fail-safe |
 ```
 
-- [ ] **Step 4: Full verify + hygiene sweep**
+- [x] **Step 4: Full verify + hygiene sweep**
 
 Run: `bun run typecheck && bun test && bun run smoke`
 Expected: all green.
@@ -1591,7 +1591,7 @@ Expected: no output (exit 1). `HYGIENE_GREP` lives only in the gitignored `.env`
 upstream identity strings that must never appear in this repo, so the check itself can't leak them.
 If anything matches, fix before committing.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add scripts/smoke.ts README.md
@@ -1618,13 +1618,13 @@ corresponding blocks in Tasks 1–2 and 5–8.**
   `TurnResult = { kind: 'text'; text: string } | { kind: 'client_tool'; name: string; args: Record<string, unknown> }`
 - `streamTransfer(res: ServerResponse, destination: string): void` exported from `src/server.ts`.
 
-- [ ] **Step 1: `.env.example` — append under the Vapi section**
+- [x] **Step 1: `.env.example` — append under the Vapi section**
 
 ```
 TELEHEALTH_TRANSFER_NUMBER=   # E.164 number Vapi warm-transfers urgent (non-911) callers to
 ```
 
-- [ ] **Step 2: `src/careApi.ts` — mockTriage gains an urgent branch** (insert BEFORE the self_care check)
+- [x] **Step 2: `src/careApi.ts` — mockTriage gains an urgent branch** (insert BEFORE the self_care check)
 
 ```ts
   if (
@@ -1646,7 +1646,7 @@ Test addition (`tests/careApi.test.ts`):
   });
 ```
 
-- [ ] **Step 3: `src/gateway.ts` — TurnResult + client-side short-circuit**
+- [x] **Step 3: `src/gateway.ts` — TurnResult + client-side short-circuit**
 
 Replace the `ToolSpec` interface, add `TurnResult`, change `complete` and both providers:
 
@@ -1705,7 +1705,7 @@ In `completeOpenAI`, same return-type change, and after `if (!msg.tool_calls?.le
     }
 ```
 
-- [ ] **Step 4: `src/tools.ts` — add the client-side transfer tool** (append to `claraTools`)
+- [x] **Step 4: `src/tools.ts` — add the client-side transfer tool** (append to `claraTools`)
 
 ```ts
   {
@@ -1733,7 +1733,7 @@ test('exposes the four care tools plus the client-side transfer tool', () => {
 });
 ```
 
-- [ ] **Step 5: `src/prompts.ts` — urgent band offers the transfer** (replace the `if (band)` block)
+- [x] **Step 5: `src/prompts.ts` — urgent band offers the transfer** (replace the `if (band)` block)
 
 ```ts
   if (band === 'urgent') {
@@ -1757,7 +1757,7 @@ test('urgent band instructs Clara to offer the telehealth transfer', () => {
 });
 ```
 
-- [ ] **Step 6: `src/server.ts` — transfer path.** Import `type TurnResult` alongside `complete`; add `streamTransfer`; the LLM-turn block becomes:
+- [x] **Step 6: `src/server.ts` — transfer path.** Import `type TurnResult` alongside `complete`; add `streamTransfer`; the LLM-turn block becomes:
 
 ```ts
 export function streamTransfer(res: ServerResponse, destination: string): void {
@@ -1846,7 +1846,7 @@ test('streamTransfer emits a Vapi transferCall tool-call SSE turn', () => {
 });
 ```
 
-- [ ] **Step 7: Run everything, commit**
+- [x] **Step 7: Run everything, commit**
 
 Run: `bun run typecheck && bun test && bun run smoke`
 Expected: all green.
