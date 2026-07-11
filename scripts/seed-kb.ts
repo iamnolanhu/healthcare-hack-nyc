@@ -73,8 +73,10 @@ async function pgrest<T>(
     const text = await res.text();
     throw new Error(`${method} ${path} -> ${res.status}: ${text}`);
   }
-  if (res.status === 204) return undefined as T;
-  return (await res.json()) as T;
+  // Writes without return=representation come back 201/204 with an empty
+  // body; parsing that would crash after the write already succeeded.
+  const text = await res.text();
+  return (text ? JSON.parse(text) : undefined) as T;
 }
 
 async function findKb(): Promise<KnowledgeBaseRow | null> {
