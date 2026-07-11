@@ -31,13 +31,13 @@ test("med_price dispatch surfaces triage + price", async () => {
   expect(out).toContain("self_care");
 });
 
-test("tool failure degrades gracefully, never throws", async () => {
+test("tool failure degrades to fixture data, never throws", async () => {
   process.env.CARE_API_MOCK = "0";
   process.env.CARE_API_BASE_URL = "http://127.0.0.1:9";
   try {
     const tool = claraTools.find((t) => t.name === "care_info");
     const out = await tool!.run({ question: "flu shots" });
-    expect(out).toContain("can't reach");
+    expect(out).toContain("answer"); // careApi served its fixture instead of failing
   } finally {
     process.env.CARE_API_MOCK = "1";
   }

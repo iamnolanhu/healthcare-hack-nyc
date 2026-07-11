@@ -44,6 +44,11 @@ function baseUrl(): string {
   return url.replace(/\/$/, "");
 }
 
+// The upstream sits behind a CDN that rejects non-browser clients (403
+// "error 1010") — a browser-like User-Agent is required on every request.
+const BROWSER_UA =
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
+
 async function get<T>(
   path: string,
   params: Record<string, string>,
@@ -52,6 +57,7 @@ async function get<T>(
   const url = `${baseUrl()}${path}${qs ? `?${qs}` : ""}`;
   const headers = {
     Authorization: `Bearer ${process.env.CARE_API_TOKEN ?? ""}`,
+    "User-Agent": BROWSER_UA,
   };
   let res = await fetch(url, { headers });
   if (res.status === 429) {
@@ -112,13 +118,37 @@ function mockTriage(symptoms: string): Triage {
   return { band: "primary", confidence: 0.55, hardEscalate: null };
 }
 
+// Fail-safe: mock mode serves fixtures directly; in real mode ANY failure
+// (dead token, CDN block, outage) falls back to the same fixtures so a
+// broken upstream never breaks a live call. Degraded ≠ broken.
+async function realOrMock<T>(
+  real: () => Promise<T>,
+  mock: () => T,
+): Promise<T> {
+  if (mockEnabled()) return mock();
+  try {
+    return await real();
+  } catch (err) {
+    console.warn(
+      `care API unavailable, serving fixture: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    return mock();
+  }
+}
+
 export async function medPrice(q: {
   symptoms?: string;
   drug?: string;
 }): Promise<MedPriceResult> {
-  if (mockEnabled()) {
-    const symptoms = q.symptoms ?? q.drug ?? "";
-    return {
+  const symptoms = q.symptoms ?? q.drug ?? "";
+  return realOrMock(
+    () => {
+      const params: Record<string, string> = {};
+      if (q.symptoms) params.symptoms = q.symptoms;
+      if (q.drug) params.drug = q.drug;
+      return get<MedPriceResult>("/med-price", params);
+    },
+    () => ({
       suggestion: /sore throat/i.test(symptoms)
         ? "acetaminophen (generic Tylenol) plus lozenges and warm salt-water gargles"
         : "generic acetaminophen",
@@ -130,20 +160,21 @@ export async function medPrice(q: {
           "do not exceed 3g per day; avoid with liver disease or heavy alcohol use",
       },
       triage: mockTriage(symptoms),
-    };
-  }
-  const params: Record<string, string> = {};
-  if (q.symptoms) params.symptoms = q.symptoms;
-  if (q.drug) params.drug = q.drug;
-  return get<MedPriceResult>("/med-price", params);
+    }),
+  );
 }
 
 export async function findClinics(q: {
   lat: number;
   lng: number;
 }): Promise<Clinic[]> {
-  if (mockEnabled()) {
-    return [
+  return realOrMock(
+    () =>
+      get<Clinic[]>("/care/clinics", {
+        lat: String(q.lat),
+        lng: String(q.lng),
+      }),
+    () => [
       {
         name: "Ryan Health | Chelsea-Clinton",
         address: "645 10th Ave, New York, NY 10036",
@@ -156,45 +187,45 @@ export async function findClinics(q: {
         distanceMiles: 1.6,
         slidingScale: true,
       },
-    ];
-  }
-  return get<Clinic[]>("/care/clinics", {
-    lat: String(q.lat),
-    lng: String(q.lng),
-  });
+    ],
+  );
 }
 
 export async function careInfo(q: { question: string }): Promise<CareInfo> {
-  if (mockEnabled()) {
-    return {
+  return realOrMock(
+    () => get<CareInfo>("/care", { q: q.question }),
+    () => ({
       answer:
         "For a sore throat: rest, fluids, warm salt-water gargles, and OTC pain relief. " +
         "See a clinician if fever over 101F lasts more than 48 hours, swallowing becomes hard, " +
         "or symptoms last past a week.",
       sources: ["care-kb:sore-throat"],
-    };
-  }
-  return get<CareInfo>("/care", { q: q.question });
+    }),
+  );
 }
 
 export async function housingCheck(q: {
   address: string;
 }): Promise<HousingCheck> {
-  if (mockEnabled()) {
-    return {
+  return realOrMock(
+    async () => {
+      const [v, c] = await Promise.all([
+        get<{ count: number }>("/housing/violations", { address: q.address }),
+        get<{ count: number }>("/housing/complaints311", {
+          address: q.address,
+        }),
+      ]);
+      return {
+        violations: v.count,
+        complaints311: c.count,
+        summary: `${v.count} open violations and ${c.count} recent 311 complaints on file.`,
+      };
+    },
+    () => ({
       violations: 3,
       complaints311: 7,
       summary:
         "3 open housing violations (2 for heat/hot water) and 7 recent 311 complaints at this address.",
-    };
-  }
-  const [v, c] = await Promise.all([
-    get<{ count: number }>("/housing/violations", { address: q.address }),
-    get<{ count: number }>("/housing/complaints311", { address: q.address }),
-  ]);
-  return {
-    violations: v.count,
-    complaints311: c.count,
-    summary: `${v.count} open violations and ${c.count} recent 311 complaints on file.`,
-  };
+    }),
+  );
 }

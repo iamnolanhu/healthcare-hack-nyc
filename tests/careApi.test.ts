@@ -42,6 +42,17 @@ describe("careApi mock mode", () => {
     expect(clinics[0]?.address.length).toBeGreaterThan(5);
   });
 
+  test("real mode with dead upstream falls back to fixtures (fail-safe)", async () => {
+    process.env.CARE_API_MOCK = "0";
+    process.env.CARE_API_BASE_URL = "http://127.0.0.1:9"; // nothing listens here
+    try {
+      const r = await medPrice({ symptoms: "chest pain" });
+      expect(r.triage.hardEscalate).toBe("911"); // fixture triage still guards
+    } finally {
+      process.env.CARE_API_MOCK = "1";
+    }
+  });
+
   test("careInfo and housingCheck respond with fixtures", async () => {
     expect(
       (await careInfo({ question: "sore throat care" })).answer.length,
