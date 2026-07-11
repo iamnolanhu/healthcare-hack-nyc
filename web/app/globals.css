@@ -1,0 +1,71 @@
+@import "tailwindcss";
+
+/*
+  Clara design tokens — calm clinical trust.
+  60/30/10: shell (60% neutral) · surface/line (30% structure) · accent + severity ramp (10%).
+  All colors OKLCH, verified in-sRGB-gamut. Never use ad-hoc hex — extend this @theme instead.
+
+  WCAG AA verification (contrast ratios computed against these exact values):
+    ink on shell ............... 15.7:1  (AA/AAA)
+    white on accent ............  5.8:1  (AA)
+    band-self-care → WHITE text  4.8:1  (AA)
+    band-primary  → WHITE text   5.4:1  (AA)
+    band-urgent   → INK text     7.7:1  (AA — white fails at 2.2:1, never use white on urgent)
+    band-emergency → WHITE text  5.2:1  (AA)
+    band-crisis   → WHITE text   6.6:1  (AA)
+    ink on every -soft variant . ≥14:1  (AA/AAA)
+*/
+@theme {
+  /* 60% — shell: warm off-white, holds the space */
+  --color-shell: oklch(97.5% 0.006 85);
+
+  /* 30% — structure: cards and hairlines */
+  --color-surface: oklch(99.2% 0.003 85);
+  --color-line: oklch(90% 0.008 85);
+
+  /* Ink: warm near-black + muted secondary text (6.1:1 on shell) */
+  --color-ink: oklch(23% 0.012 75);
+  --color-ink-muted: oklch(48% 0.015 75);
+
+  /* 10% — the ONE accent: calm teal. White text only. */
+  --color-accent: oklch(50% 0.08 195);
+
+  /* Severity ramp — the brand. self_care → primary → urgent → emergency → crisis.
+     Solid = band fills (text color per table above); -soft = tinted backgrounds (ink text). */
+  --color-band-self-care: oklch(54% 0.12 150); /* calm green — white text */
+  --color-band-primary: oklch(52% 0.105 240); /* blue — white text */
+  --color-band-urgent: oklch(76% 0.14 75); /* amber — INK text */
+  --color-band-emergency: oklch(55% 0.16 42); /* orange — white text */
+  --color-band-crisis: oklch(50% 0.19 27); /* red — white text */
+
+  --color-band-self-care-soft: oklch(95% 0.035 150);
+  --color-band-primary-soft: oklch(95% 0.025 235);
+  --color-band-urgent-soft: oklch(96% 0.03 85);
+  --color-band-emergency-soft: oklch(95% 0.025 45);
+  --color-band-crisis-soft: oklch(94% 0.03 27);
+}
+
+@theme inline {
+  /* Geist = voice/UI. Geist Mono = grounded data ONLY (prices, distances,
+     confidence %, RXCUI, phone numbers) — always with tabular-nums. */
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--color-shell);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+}
+
+/* Motion constitution: ≤250ms, ease-out, no spring/bounce.
+   Under reduced motion, everything settles instantly. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
