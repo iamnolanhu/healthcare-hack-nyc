@@ -94,6 +94,14 @@ export function streamTransfer(res: ServerResponse, destination: string): void {
 export function buildServer(): FastifyInstance {
   const app = Fastify({ logger: process.env.NODE_ENV !== "test" });
 
+  app.get("/", async () => ({
+    service: "Clara — Care Line",
+    status: "ok",
+    call: process.env.CLARA_PHONE_NUMBER ?? null,
+    endpoints: ["/health", "/chat/completions"],
+    mock: process.env.CARE_API_MOCK === "1",
+  }));
+
   app.get("/health", async () => ({ ok: true }));
 
   app.post("/chat/completions", async (request, reply) => {

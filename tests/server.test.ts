@@ -62,6 +62,14 @@ test("emergency turn streams the scripted 911 SSE and never calls the LLM", asyn
   expect(loadProfile("+15559999999")).not.toBeNull(); // turn was remembered
 });
 
+test("root route returns a friendly status instead of a 404", async () => {
+  const res = await app.inject({ method: "GET", url: "/" });
+  expect(res.statusCode).toBe(200);
+  const body = res.json() as { service: string; endpoints: string[] };
+  expect(body.service).toContain("Clara");
+  expect(body.endpoints).toContain("/chat/completions");
+});
+
 test("streamTransfer emits a Vapi transferCall tool-call SSE turn", () => {
   const writes: string[] = [];
   const fake = {
