@@ -17,6 +17,16 @@ describe("searchKb (representative queries per namespace)", () => {
     const hits = searchKb("I don't have papers can I still see a doctor");
     expect(hits[0]?.id).toBe("nyc:nyc-care");
   });
+
+  test("sore throat phrasing -> care:sore-throat first", () => {
+    const hits = searchKb("my throat is killing me");
+    expect(hits[0]?.id).toBe("care:sore-throat");
+  });
+
+  test("urgent care vs ER phrasing -> nyc:urgent-care-vs-er first", () => {
+    const hits = searchKb("should I go to the emergency room or urgent care");
+    expect(hits[0]?.id).toBe("nyc:urgent-care-vs-er");
+  });
 });
 
 describe("searchKb (edge cases)", () => {
@@ -36,8 +46,8 @@ describe("searchKb (edge cases)", () => {
 });
 
 describe("KB_ENTRIES content integrity", () => {
-  test("has exactly 22 entries", () => {
-    expect(KB_ENTRIES.length).toBe(22);
+  test("has exactly 30 entries", () => {
+    expect(KB_ENTRIES.length).toBe(30);
   });
 
   test("every entry has non-empty id/title/body and at least 4 keywords", () => {
