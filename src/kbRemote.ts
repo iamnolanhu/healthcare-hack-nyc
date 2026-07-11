@@ -49,8 +49,11 @@ async function fetchRemoteDocs(): Promise<KbEntry[] | null> {
     const endpoint =
       `${url.replace(/\/$/, "")}/rest/v1/knowledge_documents` +
       `?knowledge_base_id=eq.${kbId}&deleted_at=is.null&select=id,title,content`;
+    // A hung connection must not stall a live voice turn — cap the wait
+    // and let the local fallback answer instead.
     const res = await fetch(endpoint, {
       headers: { apikey: key, Authorization: `Bearer ${key}` },
+      signal: AbortSignal.timeout(2000),
     });
     if (!res.ok) throw new Error(`kb API ${res.status}`);
     const rows = (await res.json()) as RemoteRow[];
