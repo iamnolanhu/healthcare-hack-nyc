@@ -15,6 +15,9 @@ dist/
 __pycache__/
 *.pyc
 
+# Caller-profile store (may hold phone numbers)
+data/
+
 # OS / editor
 .DS_Store
 *.log
