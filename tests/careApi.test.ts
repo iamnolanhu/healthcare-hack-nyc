@@ -42,13 +42,43 @@ describe("careApi mock mode", () => {
     expect(clinics[0]?.address.length).toBeGreaterThan(5);
   });
 
-  test("real mode with dead upstream falls back to fixtures (fail-safe)", async () => {
+  test("live mode with dead upstream falls back to fixtures (fail-safe)", async () => {
+    process.env.CARE_API_MODE = "live";
     process.env.CARE_API_MOCK = "0";
+    process.env.CARE_API_TOKEN = "static-test-token"; // lets get() reach the wire
     process.env.CARE_API_BASE_URL = "http://127.0.0.1:9"; // nothing listens here
     try {
       const r = await medPrice({ symptoms: "chest pain" });
       expect(r.triage.hardEscalate).toBe("911"); // fixture triage still guards
     } finally {
+      process.env.CARE_API_MODE = "mock";
+      process.env.CARE_API_MOCK = "1";
+      delete process.env.CARE_API_TOKEN;
+    }
+  });
+
+  test("fail-closed: no CARE_API_MODE=live means no network even with CARE_API_MOCK=0", async () => {
+    process.env.CARE_API_MOCK = "0";
+    delete process.env.CARE_API_MODE;
+    process.env.CARE_API_BASE_URL = "http://127.0.0.1:9"; // must NOT be contacted
+    try {
+      const r = await medPrice({ symptoms: "sore throat" });
+      expect(r.triage.band).toBe("self_care"); // fixture served without a fetch
+    } finally {
+      process.env.CARE_API_MOCK = "1";
+    }
+  });
+
+  test("live mode without an upstream token serves fixtures (no unauthenticated call)", async () => {
+    process.env.CARE_API_MODE = "live";
+    process.env.CARE_API_MOCK = "0";
+    delete process.env.CARE_API_TOKEN;
+    process.env.CARE_API_BASE_URL = "http://127.0.0.1:9";
+    try {
+      const r = await medPrice({ symptoms: "chest pain" });
+      expect(r.triage.hardEscalate).toBe("911");
+    } finally {
+      process.env.CARE_API_MODE = "mock";
       process.env.CARE_API_MOCK = "1";
     }
   });

@@ -1,6 +1,9 @@
 // Typed client for the upstream care API (read-only integration).
 // CARE_API_MOCK=1 serves realistic fixtures so the whole pipeline runs
-// end-to-end with no token; the real token hot-swaps in via .env.
+// end-to-end with no token; live mode authenticates with a self-refreshing
+// JWT managed by careAuth.ts.
+
+import { careLiveEnabled, getAccessToken, invalidateAccess } from "./careAuth";
 
 export type TriageBand =
   "crisis" | "emergency" | "urgent" | "primary" | "self_care";
@@ -36,7 +39,8 @@ export interface HousingCheck {
   summary: string;
 }
 
-const mockEnabled = (): boolean => process.env.CARE_API_MOCK === "1";
+// Egress timeout (ms): a hung/slow upstream must never stall a voice turn.
+const timeoutMs = (): number => Number(process.env.CARE_API_TIMEOUT_MS) || 4000;
 
 function baseUrl(): string {
   const url = process.env.CARE_API_BASE_URL;
@@ -49,17 +53,44 @@ function baseUrl(): string {
 const BROWSER_UA =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
 
+// Bearer resolution order: a live JWT from the token manager, falling back to
+// a static CARE_API_TOKEN if one is set (legacy/manual override).
+async function bearer(): Promise<string> {
+  return (await getAccessToken()) ?? process.env.CARE_API_TOKEN ?? "";
+}
+
 async function get<T>(
   path: string,
   params: Record<string, string>,
 ): Promise<T> {
+  // Fail closed: never send an unauthenticated request upstream. Without a
+  // token we can't authenticate and would only leak an empty Authorization
+  // header — throw so realOrMock serves fixtures instead of touching the wire.
+  let token = await bearer();
+  if (!token) throw new Error(`care API ${path} -> no upstream token`);
+
   const qs = new URLSearchParams(params).toString();
   const url = `${baseUrl()}${path}${qs ? `?${qs}` : ""}`;
-  const headers = {
-    Authorization: `Bearer ${process.env.CARE_API_TOKEN ?? ""}`,
-    "User-Agent": BROWSER_UA,
-  };
-  let res = await fetch(url, { headers });
+  // Egress allowlist: only the upstream's own bearer token and a User-Agent
+  // leave our system — never a Clara/Sigma/Vapi credential, caller identity,
+  // or internal id. The query params are the minimal functional inputs.
+  const send = async (t: string) =>
+    fetch(url, {
+      headers: { Authorization: `Bearer ${t}`, "User-Agent": BROWSER_UA },
+      signal: AbortSignal.timeout(timeoutMs()),
+    });
+
+  let res = await send(token);
+
+  // An expired/revoked access token surfaces as 401 — refresh once and retry.
+  if (res.status === 401) {
+    invalidateAccess();
+    token = await bearer();
+    if (!token)
+      throw new Error(`care API ${path} -> no upstream token after refresh`);
+    res = await send(token);
+  }
+
   if (res.status === 429) {
     // Care API rate limits fail fast with a retry_after; retry exactly once.
     const body = (await res.json().catch(() => ({}))) as {
@@ -67,7 +98,7 @@ async function get<T>(
     };
     const waitMs = Math.min((body.retry_after ?? 1) * 1000, 3000);
     await new Promise((resolve) => setTimeout(resolve, waitMs));
-    res = await fetch(url, { headers });
+    res = await send(token);
   }
   if (!res.ok) throw new Error(`care API ${path} -> ${res.status}`);
   return (await res.json()) as T;
@@ -118,14 +149,15 @@ function mockTriage(symptoms: string): Triage {
   return { band: "primary", confidence: 0.55, hardEscalate: null };
 }
 
-// Fail-safe: mock mode serves fixtures directly; in real mode ANY failure
-// (dead token, CDN block, outage) falls back to the same fixtures so a
-// broken upstream never breaks a live call. Degraded ≠ broken.
+// Fail-safe: unless live mode is explicitly enabled we serve fixtures directly
+// (no network). In live mode ANY failure (dead token, CDN block, outage,
+// timeout) falls back to the same fixtures so a broken or removed upstream can
+// never break a call. Degraded ≠ broken.
 async function realOrMock<T>(
   real: () => Promise<T>,
   mock: () => T,
 ): Promise<T> {
-  if (mockEnabled()) return mock();
+  if (!careLiveEnabled()) return mock();
   try {
     return await real();
   } catch (err) {
