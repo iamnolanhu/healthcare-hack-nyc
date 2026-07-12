@@ -222,6 +222,7 @@ async function completeOpenAI(
       body: JSON.stringify({
         model,
         messages: turns,
+        max_tokens: 1024,
         ...(toolDefs.length ? { tools: toolDefs } : {}),
       }),
     });
