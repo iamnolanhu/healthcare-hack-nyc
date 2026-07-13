@@ -10,8 +10,12 @@ export type TriageBand =
 
 export interface Triage {
   band: TriageBand;
-  confidence: number;
+  // Mock rule engine only — the live upstream engine doesn't score confidence.
+  confidence?: number;
   hardEscalate: "911" | "988" | null;
+  // Live upstream only: the rule engine's caller-facing guidance texts.
+  action?: string;
+  safetyNet?: string;
 }
 
 export interface MedPriceResult {
@@ -25,7 +29,10 @@ export interface Clinic {
   name: string;
   address: string;
   distanceMiles: number;
-  slidingScale: boolean;
+  // Fixtures only — the live directory doesn't flag sliding-scale status.
+  slidingScale?: boolean;
+  // Live directory only — useful for a caller ("their number is ...").
+  phone?: string;
 }
 
 export interface CareInfo {
@@ -149,6 +156,65 @@ function mockTriage(symptoms: string): Triage {
   return { band: "primary", confidence: 0.55, hardEscalate: null };
 }
 
+// ---- Live upstream response shapes (ivr.sohyper.com, verified 2026-07-13) ----
+// The upstream predates our types: prices are decimal strings, clinics come
+// wrapped and metric, housing returns record lists instead of counts, and
+// triage carries guidance texts but no hardEscalate. Each real() path below
+// normalizes to the local types so live and mock stay interchangeable.
+
+interface UpstreamMedPrice {
+  suggestion: { drug?: string; otc?: string; note?: string } | null;
+  price: { cash_usd?: string; goodrx_usd?: string } | null;
+  ground: {
+    rxcui?: string;
+    name?: string;
+    purpose?: string;
+    warning?: string;
+  } | null;
+  triage: { band?: string; action?: string; safetyNet?: string } | null;
+}
+
+const TRIAGE_BANDS: readonly TriageBand[] = [
+  "crisis",
+  "emergency",
+  "urgent",
+  "primary",
+  "self_care",
+];
+
+// The live engine sends no hardEscalate — derive it from the band exactly as
+// the fixtures do, so both modes trip the same downstream behavior. An
+// unrecognized band degrades to "primary" (the guardrail in guardrail.ts, not
+// this field, is the authoritative safety net and runs before the model).
+function mapTriage(u: NonNullable<UpstreamMedPrice["triage"]>): Triage {
+  const band = TRIAGE_BANDS.includes(u.band as TriageBand)
+    ? (u.band as TriageBand)
+    : "primary";
+  return {
+    band,
+    hardEscalate:
+      band === "crisis" ? "988" : band === "emergency" ? "911" : null,
+    ...(u.action ? { action: u.action } : {}),
+    ...(u.safetyNet ? { safetyNet: u.safetyNet } : {}),
+  };
+}
+
+// "ibuprofen (Advil) — for pain"; drug-name lookups come back with a null
+// suggestion, so fall through to the grounded drug name.
+function mapSuggestion(u: UpstreamMedPrice, fallback: string): string {
+  const s = u.suggestion;
+  const name =
+    s?.drug && s?.otc && s.otc !== s.drug
+      ? `${s.drug} (${s.otc})`
+      : (s?.drug ?? s?.otc ?? u.ground?.name ?? fallback);
+  return s?.note ? `${name} — ${s.note}` : name;
+}
+
+function parseUsd(v: string | undefined): number | null {
+  const n = Number.parseFloat(v ?? "");
+  return Number.isFinite(n) ? n : null;
+}
+
 // Fail-safe: unless live mode is explicitly enabled we serve fixtures directly
 // (no network). In live mode ANY failure (dead token, CDN block, outage,
 // timeout) falls back to the same fixtures so a broken or removed upstream can
@@ -174,11 +240,26 @@ export async function medPrice(q: {
 }): Promise<MedPriceResult> {
   const symptoms = q.symptoms ?? q.drug ?? "";
   return realOrMock(
-    () => {
+    async () => {
       const params: Record<string, string> = {};
       if (q.symptoms) params.symptoms = q.symptoms;
       if (q.drug) params.drug = q.drug;
-      return get<MedPriceResult>("/med-price", params);
+      const u = await get<UpstreamMedPrice>("/med-price", params);
+      return {
+        suggestion: mapSuggestion(u, symptoms),
+        price: {
+          cash: parseUsd(u.price?.cash_usd),
+          goodrx: parseUsd(u.price?.goodrx_usd),
+        },
+        ground: {
+          ...(u.ground?.rxcui ? { rxcui: u.ground.rxcui } : {}),
+          ...(u.ground?.purpose ? { purpose: u.ground.purpose } : {}),
+          ...(u.ground?.warning ? { warnings: u.ground.warning } : {}),
+        },
+        // Drug-only lookups come back without triage — mirror it locally so
+        // the result always carries a band.
+        triage: u.triage ? mapTriage(u.triage) : mockTriage(symptoms),
+      };
     },
     () => ({
       suggestion: /sore throat/i.test(symptoms)
@@ -201,11 +282,24 @@ export async function findClinics(q: {
   lng: number;
 }): Promise<Clinic[]> {
   return realOrMock(
-    () =>
-      get<Clinic[]>("/care/clinics", {
-        lat: String(q.lat),
-        lng: String(q.lng),
-      }),
+    async () => {
+      const u = await get<{
+        clinics?: Array<{
+          name?: string;
+          address?: string;
+          city?: string;
+          phone?: string;
+          km?: number;
+        }>;
+      }>("/care/clinics", { lat: String(q.lat), lng: String(q.lng) });
+      return (u.clinics ?? []).map((c) => ({
+        name: c.name ?? "",
+        address: [c.address, c.city].filter(Boolean).join(", "),
+        distanceMiles:
+          typeof c.km === "number" ? Math.round(c.km * 6.21371) / 10 : 0,
+        ...(c.phone ? { phone: c.phone } : {}),
+      }));
+    },
     () => [
       {
         name: "Ryan Health | Chelsea-Clinton",
@@ -225,7 +319,18 @@ export async function findClinics(q: {
 
 export async function careInfo(q: { question: string }): Promise<CareInfo> {
   return realOrMock(
-    () => get<CareInfo>("/care", { q: q.question }),
+    async () => {
+      const u = await get<{
+        answer?: { answer?: string; source?: string } | string;
+      }>("/care", { q: q.question });
+      const a = typeof u.answer === "string" ? { answer: u.answer } : u.answer;
+      // An empty answer is worse than the fixture — throw into the fallback.
+      if (!a?.answer) throw new Error("care API /care -> empty answer");
+      return {
+        answer: a.answer,
+        sources: typeof a === "object" && a.source ? [a.source] : [],
+      };
+    },
     () => ({
       answer:
         "For a sore throat: rest, fluids, warm salt-water gargles, and OTC pain relief. " +
@@ -241,16 +346,21 @@ export async function housingCheck(q: {
 }): Promise<HousingCheck> {
   return realOrMock(
     async () => {
+      // Upstream returns the record lists themselves, not counts.
       const [v, c] = await Promise.all([
-        get<{ count: number }>("/housing/violations", { address: q.address }),
-        get<{ count: number }>("/housing/complaints311", {
+        get<{ violations?: unknown[] }>("/housing/violations", {
+          address: q.address,
+        }),
+        get<{ complaints?: unknown[] }>("/housing/complaints311", {
           address: q.address,
         }),
       ]);
+      const violations = v.violations?.length ?? 0;
+      const complaints311 = c.complaints?.length ?? 0;
       return {
-        violations: v.count,
-        complaints311: c.count,
-        summary: `${v.count} open violations and ${c.count} recent 311 complaints on file.`,
+        violations,
+        complaints311,
+        summary: `${violations} open violations and ${complaints311} recent 311 complaints on file.`,
       };
     },
     () => ({
