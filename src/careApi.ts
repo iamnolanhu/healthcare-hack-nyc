@@ -239,42 +239,44 @@ export async function medPrice(q: {
   drug?: string;
 }): Promise<MedPriceResult> {
   const symptoms = q.symptoms ?? q.drug ?? "";
-  return realOrMock(
-    async () => {
-      const params: Record<string, string> = {};
-      if (q.symptoms) params.symptoms = q.symptoms;
-      if (q.drug) params.drug = q.drug;
-      const u = await get<UpstreamMedPrice>("/med-price", params);
-      return {
-        suggestion: mapSuggestion(u, symptoms),
-        price: {
-          cash: parseUsd(u.price?.cash_usd),
-          goodrx: parseUsd(u.price?.goodrx_usd),
-        },
-        ground: {
-          ...(u.ground?.rxcui ? { rxcui: u.ground.rxcui } : {}),
-          ...(u.ground?.purpose ? { purpose: u.ground.purpose } : {}),
-          ...(u.ground?.warning ? { warnings: u.ground.warning } : {}),
-        },
-        // Drug-only lookups come back without triage — mirror it locally so
-        // the result always carries a band.
-        triage: u.triage ? mapTriage(u.triage) : mockTriage(symptoms),
-      };
+  const mock = (): MedPriceResult => ({
+    suggestion: /sore throat/i.test(symptoms)
+      ? "acetaminophen (generic Tylenol) plus lozenges and warm salt-water gargles"
+      : "generic acetaminophen",
+    price: { cash: 4.99, goodrx: 2.79 },
+    ground: {
+      rxcui: "161",
+      purpose: "pain reliever / fever reducer",
+      warnings:
+        "do not exceed 3g per day; avoid with liver disease or heavy alcohol use",
     },
-    () => ({
-      suggestion: /sore throat/i.test(symptoms)
-        ? "acetaminophen (generic Tylenol) plus lozenges and warm salt-water gargles"
-        : "generic acetaminophen",
-      price: { cash: 4.99, goodrx: 2.79 },
-      ground: {
-        rxcui: "161",
-        purpose: "pain reliever / fever reducer",
-        warnings:
-          "do not exceed 3g per day; avoid with liver disease or heavy alcohol use",
+    triage: mockTriage(symptoms),
+  });
+  // The model sometimes probes med_price with no arguments; the upstream
+  // 400s on an empty query, so serve the generic fixture without touching
+  // the wire.
+  if (!q.symptoms && !q.drug) return mock();
+  return realOrMock(async () => {
+    const params: Record<string, string> = {};
+    if (q.symptoms) params.symptoms = q.symptoms;
+    if (q.drug) params.drug = q.drug;
+    const u = await get<UpstreamMedPrice>("/med-price", params);
+    return {
+      suggestion: mapSuggestion(u, symptoms),
+      price: {
+        cash: parseUsd(u.price?.cash_usd),
+        goodrx: parseUsd(u.price?.goodrx_usd),
       },
-      triage: mockTriage(symptoms),
-    }),
-  );
+      ground: {
+        ...(u.ground?.rxcui ? { rxcui: u.ground.rxcui } : {}),
+        ...(u.ground?.purpose ? { purpose: u.ground.purpose } : {}),
+        ...(u.ground?.warning ? { warnings: u.ground.warning } : {}),
+      },
+      // Drug-only lookups come back without triage — mirror it locally so
+      // the result always carries a band.
+      triage: u.triage ? mapTriage(u.triage) : mockTriage(symptoms),
+    };
+  }, mock);
 }
 
 export async function findClinics(q: {
